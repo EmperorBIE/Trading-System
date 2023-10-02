@@ -1,6 +1,8 @@
 #pragma once
+#include<iostream>
 #include<unordered_map>
 #include<set>
+#include<iomanip>
 
 #define __ASK false
 #define __BID true
@@ -62,12 +64,23 @@ public:
 	void add_order(const size_t&, const uint16_t&);	//添加新order
 	void cancel_order(const size_t&);	//撤单
 	void reallocate_memory();	//当内存超限时重整内存
+	void print();	//打印
 
 	OrderList();
 	OrderList(const size_t&, const uint16_t&);	//以一个新的order初始化OrderList
 
 	~OrderList();
 };
+
+//打印
+void OrderList::print() {
+	if (__id_offset_map.empty()) return;
+	cout << setw(4) << " ";
+	for (auto it = __first_valid_order_offset; it != __last_valid_order_offset; it = __orderInfo_list[it].__next_valid_offset) {
+		cout << setw(4) << __order_list[it].__quantity;
+	}
+	cout << setw(4) << __order_list[__last_valid_order_offset].__quantity << endl;
+}
 
 //添加新order
 void OrderList::add_order(const size_t& id, const uint16_t& quantity) {
@@ -85,7 +98,7 @@ void OrderList::cancel_order(const size_t& id) {
 	//if (__orderInfo_list[offset].__invalid) return;
 	const size_t previous_offset = __orderInfo_list[offset].__previous_valid_offset;
 	const size_t next_offset = __orderInfo_list[offset].__next_valid_offset;
-	const uint8_t location = (__orderInfo_list[offset].__previous_valid_offset == __first_valid_order_offset) << 1 | __orderInfo_list[offset].__next_valid_offset == __last_valid_order_offset;
+	const uint8_t location = ((__orderInfo_list[offset].__previous_valid_offset == __first_valid_order_offset) << 1) | __orderInfo_list[offset].__next_valid_offset == __last_valid_order_offset;
 	switch (location) {
 		//__orderInfo_list[offset].__invalid = true;
 		__id_offset_map.erase(offset);
@@ -144,6 +157,10 @@ OrderList::OrderList(const size_t& id, const uint16_t& quantity) :__first_valid_
 	__id_offset_map[id] = 0;
 }
 
+OrderList::OrderList():__first_valid_order_offset(0), __last_valid_order_offset(0) {}
+
+OrderList::~OrderList() {}
+
 //订单簿
 class OrderBook {
 private:
@@ -159,8 +176,29 @@ public:
 	void bid(const size_t&, const uint16_t&, const uint16_t&);	//买单，参数：id, price, quantity
 	void ask(const size_t&, const uint16_t&, const uint16_t&);	//卖单，参数：id, price, quantity
 	void cancel(const size_t&);	//撤单
+	void print();	//打印orderbook
 	OrderBook();
 };
+
+//打印orderbook
+void OrderBook::print() {
+	cout << "====================  Orders  ====================" << endl;
+	cout << "Party" << setw(11) << "Price" << setw(16) << "Order List" << endl;
+	auto cnt = __ask_price_set.size();
+	for (auto it = __ask_price_set.rbegin(); it != __ask_price_set.rend(); it++, cnt--) {
+		auto price = *it;
+		cout << "Sell " << cnt << setw(10) << price;
+		__price_orderList_map[price].print();
+	}
+	cout << endl;
+	cnt = 1;
+	for (auto it = __bid_price_set.begin(); it != __bid_price_set.end(); it++, cnt++) {
+		auto price = *it;
+		cout << "Buy  " << cnt << setw(10) << price;
+		__price_orderList_map[price].print();
+	}
+	cout << "==================================================" << endl << endl;
+}
 
 //初始化订单簿
 OrderBook::OrderBook() :__bid_price(0), __ask_price(0xffff) {}
