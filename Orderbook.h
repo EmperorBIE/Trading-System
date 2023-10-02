@@ -2,6 +2,11 @@
 #include<unordered_map>
 #include<set>
 
+#define __ASK false
+#define __BID true
+
+typedef bool ACTION;
+
 using namespace std;
 
 //订单
@@ -56,7 +61,6 @@ public:
 
 	void add_order(const size_t&, const uint16_t&);	//添加新order
 	void cancel_order(const size_t&);	//撤单
-	uint16_t take(const uint16_t&);		//成交
 	void reallocate_memory();	//当内存超限时重整内存
 
 	OrderList();
@@ -111,34 +115,6 @@ void OrderList::cancel_order(const size_t& id) {
 	}
 }
 
-//TODO: 把这个方法转移到OrderBook类中，因为OrderBook中的__id__price_map也需要维护，吃单后被删除的单要再__id_price_map中也移除掉
-//吃掉数量为quantity的单，返回吃单方在该价位全部成交后还剩下的未成交的数量
-uint16_t OrderList::take(const uint16_t& quantity) {
-	uint16_t _quantity = quantity;
-	while (_quantity != 0 && !__id_offset_map.empty()) {
-		Order& order = __order_list[__first_valid_order_offset];
-		if (order.__quantity >= _quantity) {
-			//挂单方余量>=吃单方
-			order.__quantity -= _quantity;
-			_quantity = 0;
-		}
-		else {
-			//挂单方余量<吃单方
-			_quantity -= order.__quantity;
-			order.__quantity = 0;
-		}
-		if (order.__quantity == 0) {
-			//如果挂单方的order全部成交了
-			const size_t offset = __id_offset_map[order.__id];
-			__id_offset_map.erase(order.__id);
-			__first_valid_order_offset = __orderInfo_list[offset].__next_valid_offset;
-			__orderInfo_list[__first_valid_order_offset].__previous_valid_offset = __first_valid_order_offset;
-			//__orderInfo_list[offset].__invalid = true;
-		}
-	}
-	return _quantity;
-}
-
 //重整内存
 void OrderList::reallocate_memory() {
 	size_t offset_from = __first_valid_order_offset;
@@ -178,10 +154,11 @@ private:
 	unordered_map<uint16_t, OrderList> __price_orderList_map;	//每个价格维护一个orderList
 	unordered_map<size_t, uint16_t> __id_price_map;		//记录每个id的order的价格
 
-	uint16_t take(const uint16_t&, const uint16_t&);	//吃单
+	uint16_t take(const uint16_t&, const uint16_t&, const ACTION&);	//吃单
 public:
 	void bid(const size_t&, const uint16_t&, const uint16_t&);	//买单，参数：id, price, quantity
 	void ask(const size_t&, const uint16_t&, const uint16_t&);	//卖单，参数：id, price, quantity
+	void cancel(const size_t&);	//撤单
 	OrderBook();
 };
 
@@ -189,10 +166,48 @@ public:
 OrderBook::OrderBook() :__bid_price(0), __ask_price(0xffff) {}
 
 //在价格为price处吃单
-uint16_t OrderBook::take(const uint16_t& price, const uint16_t& quantity) {
+uint16_t OrderBook::take(const uint16_t& price, const uint16_t& quantity, const ACTION& action) {
 	uint16_t _quantity = quantity;
 	OrderList& order_list = __price_orderList_map[price];
 
+	while (_quantity != 0 && !order_list.__id_offset_map.empty()) {
+		//在当前价格上吃单，直到吃够了quantity或者当前价格上没单可吃了
+		Order& order = order_list.__order_list[order_list.__first_valid_order_offset];
+		if (order.__quantity >= _quantity) {
+			//挂单方余量>=吃单方
+			order.__quantity -= _quantity;
+			_quantity = 0;
+		}
+		else {
+			//挂单方余量<吃单方
+			_quantity -= order.__quantity;
+			order.__quantity = 0;
+		}
+		if (order.__quantity == 0) {
+			//如果挂单方的order全部成交了
+			const size_t offset = order_list.__id_offset_map[order.__id];
+			order_list.__id_offset_map.erase(order.__id);
+			order_list.__first_valid_order_offset = order_list.__orderInfo_list[offset].__next_valid_offset;
+			order_list.__orderInfo_list[order_list.__first_valid_order_offset].__previous_valid_offset = order_list.__first_valid_order_offset;
+			//__orderInfo_list[offset].__invalid = true;
+			__id_price_map.erase(order.__id);
+		}
+	}
+	if (order_list.__id_offset_map.empty()) {
+		//如果这个order_list所对应的价格上面的所有挂单都吃完了
+		order_list.~OrderList();
+		if (action == __BID) {
+			__ask_price_set.erase(__ask_price);
+			if (!__ask_price_set.empty()) __ask_price = *(__ask_price_set.begin());
+			else __ask_price = 0xffff;
+		}
+		else {
+			__bid_price_set.erase(__bid_price);
+			if (!__bid_price_set.empty()) __bid_price = *(__bid_price_set.begin());
+			else __bid_price = 0;
+		}
+	}
+	return _quantity;
 }
 
 //买单，参数：id, price, quantity
@@ -202,9 +217,8 @@ void OrderBook::bid(const size_t& id, const uint16_t& price, const uint16_t& qua
 		if (__price_orderList_map.find(price) == __price_orderList_map.end()) {
 			//该价格目前没有挂单
 			__price_orderList_map[price] = OrderList(id, quantity);
-			__bid_price_set.insert(price);
 			if (price > __bid_price) {
-				//如果该挂单价格高于__bid_price
+				//如果该挂单价格高于当前买方最高价，更新
 				__bid_price = price;
 				__bid_price_set.insert(price);
 			}
@@ -218,21 +232,82 @@ void OrderBook::bid(const size_t& id, const uint16_t& price, const uint16_t& qua
 	else {
 		//买单价格大于等于卖方最低价，吃单
 		uint16_t quantity_surplus = quantity;
-		while (quantity_surplus > 0) {
-
+		while (quantity_surplus > 0 && price >= __ask_price) {
+			quantity_surplus = take(__ask_price, quantity, __BID);
 		}
-
-
-
+		if (quantity_surplus > 0) {
+			//全都吃完了还有富裕，那么在这个price价格上把剩余没成交的份额挂单
+			__id_price_map[id] = price;
+			__price_orderList_map[price] = OrderList(id, quantity);
+			__bid_price_set.insert(price);
+			__bid_price = price;
+		}
 	}
 }
 
 //卖单，参数：id, price, quantity
 void OrderBook::ask(const size_t& id, const uint16_t& price, const uint16_t& quantity) {
 	if (price > __bid_price) {
-		//挂单
+		//卖单价格高于买方最高价，挂单
+		if (__price_orderList_map.find(price) == __price_orderList_map.end()) {
+			//该价格目前没有挂单
+			__price_orderList_map[price] = OrderList(id, quantity);
+			if (price < __ask_price) {
+				//如果该挂单价格小于当前卖方最低价，更新
+				__ask_price = price;
+				__ask_price_set.insert(price);
+			}
+		}
+		else {
+			//该价格目前有挂单
+			__price_orderList_map[price].add_order(id, quantity);
+		}
+		__id_price_map[id] = price;
+
 	}
 	else {
-		//吃单
+		//卖单价格低于买方最高价，吃单
+		uint16_t quantity_surplus = quantity;
+		while (quantity_surplus > 0 && price <= __bid_price) {
+			quantity_surplus = take(__bid_price, quantity, __ASK);
+		}
+		if (quantity_surplus > 0) {
+			//全都吃完了还有富裕，那么在这个price价格上把剩余没成交的份额挂单
+			__id_price_map[id] = price;
+			__price_orderList_map[price] = OrderList(id, quantity);
+			__ask_price_set.insert(price);
+			__ask_price = price;
+		}
+	}
+}
+
+//撤单
+void OrderBook::cancel(const size_t& id) {
+	if (__id_price_map.find(id) == __id_price_map.end()) return;
+	const uint16_t price = __id_price_map[id];
+	if (__price_orderList_map[price].__id_offset_map.size() == 1) {
+		//如果这个要撤销的单是该价位下唯一的单
+		__id_price_map.erase(id);
+		__price_orderList_map.erase(price);
+		if (price == __ask_price) {
+			__ask_price_set.erase(price);
+			if (!__ask_price_set.empty()) __ask_price = *(__ask_price_set.begin());
+			else __ask_price = 0xffff;
+		}
+		else if (price == __bid_price) {
+			__bid_price_set.erase(price);
+			if (!__bid_price_set.empty()) __bid_price = *(__bid_price_set.begin());
+			else __bid_price = 0;
+		}
+		else if (price > __ask_price) {
+			__ask_price_set.erase(price);
+		}
+		else {	//price < __bid_price
+			__bid_price_set.erase(price);
+		}
+	}
+	else {
+		//如果这个要撤销的单不是该价位下唯一的单
+		__price_orderList_map[price].cancel_order(id);
 	}
 }
