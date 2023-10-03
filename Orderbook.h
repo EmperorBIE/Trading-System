@@ -19,7 +19,7 @@ public:
 
 	Order& operator=(const Order&);
 
-	//Order() = delete;
+	Order() = delete;
 	Order(const size_t&, const uint16_t&);
 };
 
@@ -35,25 +35,23 @@ Order::Order(const size_t& id, const uint16_t& quantity) :__id(id), __quantity(q
 //订单信息
 class OrderInfo {
 public:
-	//bool __invalid;		//该order是否有效
 	size_t __previous_valid_offset;	//时序在该order前面的最近有效order的位置
 	size_t __next_valid_offset;		//时序在该order后面的最近有效order的位置
 
 	OrderInfo& operator=(const OrderInfo&);
 
-	//OrderInfo() = delete;
+	OrderInfo() = delete;
 	OrderInfo(const size_t&, const size_t&);
 };
 
 OrderInfo& OrderInfo::operator=(const OrderInfo& order) {
 	if (this == &order) return *this;
-	//__invalid = order.__invalid;
 	__previous_valid_offset = order.__previous_valid_offset;
 	__next_valid_offset = order.__next_valid_offset;
 	return *this;
 }
 
-OrderInfo::OrderInfo(const size_t& previous_offset, const size_t& next_offset) :/*__invalid(false),*/ __previous_valid_offset(previous_offset), __next_valid_offset(next_offset) {}
+OrderInfo::OrderInfo(const size_t& previous_offset, const size_t& next_offset) :__previous_valid_offset(previous_offset), __next_valid_offset(next_offset) {}
 
 //订单列表，每个价格对应一个OrderList
 class OrderList {
@@ -98,17 +96,12 @@ void OrderList::add_order(const size_t& id, const uint16_t& quantity) {
 
 //撤单
 void OrderList::cancel_order(const size_t& id) {
-	cout << "cancel_order:" << id << endl;
 	if (__id_offset_map.find(id) == __id_offset_map.end()) return;
 	const size_t offset = __id_offset_map[id];
 	__id_offset_map.erase(id);
 	const size_t previous_offset = __orderInfo_list[offset].__previous_valid_offset;
 	const size_t next_offset = __orderInfo_list[offset].__next_valid_offset;
-	cout << "offset:" << offset << endl;
-	cout << "previous_offset:" << previous_offset << " " << "next_offset:" << next_offset << endl;
-	cout << "first_valid_offset:" << __first_valid_order_offset << " last_valid_offset:" << __last_valid_order_offset << endl;
 	const uint8_t location = ((offset == __first_valid_order_offset) << 1) | (offset == __last_valid_order_offset);
-	cout << "location:" << location << endl;
 	switch (location) {
 	case 0:
 		//该order位于order_list中间
