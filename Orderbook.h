@@ -19,11 +19,12 @@ public:
 
 	Order& operator=(const Order&);
 
-	Order() = delete;
+	//Order() = delete;
 	Order(const size_t&, const uint16_t&);
 };
 
 Order& Order::operator=(const Order& order) {
+	if (this == &order) return *this;
 	__id = order.__id;
 	__quantity = order.__quantity;
 	return *this;
@@ -38,12 +39,14 @@ public:
 	size_t __previous_valid_offset;	//时序在该order前面的最近有效order的位置
 	size_t __next_valid_offset;		//时序在该order后面的最近有效order的位置
 
-	OrderInfo() = delete;
-	OrderInfo(const size_t&, const size_t&);
 	OrderInfo& operator=(const OrderInfo&);
+
+	//OrderInfo() = delete;
+	OrderInfo(const size_t&, const size_t&);
 };
 
 OrderInfo& OrderInfo::operator=(const OrderInfo& order) {
+	if (this == &order) return *this;
 	//__invalid = order.__invalid;
 	__previous_valid_offset = order.__previous_valid_offset;
 	__next_valid_offset = order.__next_valid_offset;
@@ -66,6 +69,8 @@ public:
 	void reallocate_memory();	//当内存超限时重整内存
 	void print();	//打印
 
+	OrderList& operator=(OrderList&&) noexcept;
+
 	OrderList();
 	OrderList(const size_t&, const uint16_t&);	//以一个新的order初始化OrderList
 
@@ -77,9 +82,9 @@ void OrderList::print() {
 	if (__id_offset_map.empty()) return;
 	cout << setw(4) << " ";
 	for (auto it = __first_valid_order_offset; it != __last_valid_order_offset; it = __orderInfo_list[it].__next_valid_offset) {
-		cout << setw(4) << __order_list[it].__quantity;
+		cout << setw(4) << __order_list[it].__quantity << "(" << __order_list[it].__id << ")";
 	}
-	cout << setw(4) << __order_list[__last_valid_order_offset].__quantity << endl;
+	cout << setw(4) << __order_list[__last_valid_order_offset].__quantity << "(" << __order_list[__last_valid_order_offset].__id << ")" << endl;
 }
 
 //添加新order
@@ -93,32 +98,39 @@ void OrderList::add_order(const size_t& id, const uint16_t& quantity) {
 
 //撤单
 void OrderList::cancel_order(const size_t& id) {
+	cout << "cancel_order:" << id << endl;
 	if (__id_offset_map.find(id) == __id_offset_map.end()) return;
 	const size_t offset = __id_offset_map[id];
-	//if (__orderInfo_list[offset].__invalid) return;
+	__id_offset_map.erase(id);
 	const size_t previous_offset = __orderInfo_list[offset].__previous_valid_offset;
 	const size_t next_offset = __orderInfo_list[offset].__next_valid_offset;
-	const uint8_t location = ((__orderInfo_list[offset].__previous_valid_offset == __first_valid_order_offset) << 1) | __orderInfo_list[offset].__next_valid_offset == __last_valid_order_offset;
+	cout << "offset:" << offset << endl;
+	cout << "previous_offset:" << previous_offset << " " << "next_offset:" << next_offset << endl;
+	cout << "first_valid_offset:" << __first_valid_order_offset << " last_valid_offset:" << __last_valid_order_offset << endl;
+	const uint8_t location = ((offset == __first_valid_order_offset) << 1) | (offset == __last_valid_order_offset);
+	cout << "location:" << location << endl;
 	switch (location) {
-		//__orderInfo_list[offset].__invalid = true;
-		__id_offset_map.erase(offset);
 	case 0:
 		//该order位于order_list中间
+		cout << "该order位于order_list中间" << endl;
 		__orderInfo_list[previous_offset].__next_valid_offset = next_offset;
 		__orderInfo_list[next_offset].__previous_valid_offset = previous_offset;
 		break;
 	case 1:
 		//该order位于order_list尾部
+		cout << "该order位于order_list尾部" << endl;
 		__orderInfo_list[previous_offset].__next_valid_offset = previous_offset;
 		__last_valid_order_offset = previous_offset;
 		break;
 	case 2:
 		//该order位于order_list头部
+		cout << "该order位于order_list头部" << endl;
 		__orderInfo_list[next_offset].__previous_valid_offset = next_offset;
 		__first_valid_order_offset = next_offset;
 		break;
 	default:
 		//该order是order_list的唯一的订单
+		cout << "该order是order_list的唯一的订单" << endl;
 		/*
 		*	可能的优化：
 		*	实际场景中可能出现一个价格频繁挂单又撤单的情况，这样频繁构造和析构OrderList开销比较大
@@ -148,6 +160,16 @@ void OrderList::reallocate_memory() {
 		}
 		offset_from = __orderInfo_list[offset_from].__next_valid_offset;
 	}
+}
+
+OrderList& OrderList::operator=(OrderList&& orderList) noexcept {
+	if (this == &orderList) return *this;
+	__order_list = move(orderList.__order_list);
+	__orderInfo_list = move(orderList.__orderInfo_list);
+	__id_offset_map = move(orderList.__id_offset_map);
+	__first_valid_order_offset = orderList.__first_valid_order_offset;
+	__last_valid_order_offset = orderList.__last_valid_order_offset;
+	return *this;
 }
 
 //以一个新的order初始化OrderList
@@ -182,6 +204,8 @@ public:
 
 //打印orderbook
 void OrderBook::print() {
+	cout << "ask price:" << __ask_price << endl;
+	cout << "bid price:" << __bid_price << endl;
 	cout << "====================  Orders  ====================" << endl;
 	cout << "Party" << setw(11) << "Price" << setw(16) << "Order List" << endl;
 	auto cnt = __ask_price_set.size();
@@ -227,13 +251,12 @@ uint16_t OrderBook::take(const uint16_t& price, const uint16_t& quantity, const 
 			order_list.__id_offset_map.erase(order.__id);
 			order_list.__first_valid_order_offset = order_list.__orderInfo_list[offset].__next_valid_offset;
 			order_list.__orderInfo_list[order_list.__first_valid_order_offset].__previous_valid_offset = order_list.__first_valid_order_offset;
-			//__orderInfo_list[offset].__invalid = true;
 			__id_price_map.erase(order.__id);
 		}
 	}
 	if (order_list.__id_offset_map.empty()) {
 		//如果这个order_list所对应的价格上面的所有挂单都吃完了
-		order_list.~OrderList();
+		__price_orderList_map.erase(price);
 		if (action == __BID) {
 			__ask_price_set.erase(__ask_price);
 			if (!__ask_price_set.empty()) __ask_price = *(__ask_price_set.begin());
@@ -250,33 +273,40 @@ uint16_t OrderBook::take(const uint16_t& price, const uint16_t& quantity, const 
 
 //买单，参数：id, price, quantity
 void OrderBook::bid(const size_t& id, const uint16_t& price, const uint16_t& quantity) {
+	if (__id_price_map.find(id) != __id_price_map.end()) return;
+	cout << "bid id:" << id << setw(10) << "price:" << price << setw(15) << "ask price:" << __ask_price << endl;
 	if (price < __ask_price) {
 		//买单价格小于卖方最低价，挂单
+		cout << "买单价格小于卖方最低价，挂单" << endl;
 		if (__price_orderList_map.find(price) == __price_orderList_map.end()) {
 			//该价格目前没有挂单
+			cout << "该价格目前没有挂单" << endl;
 			__price_orderList_map[price] = OrderList(id, quantity);
+			__bid_price_set.insert(price);
 			if (price > __bid_price) {
 				//如果该挂单价格高于当前买方最高价，更新
 				__bid_price = price;
-				__bid_price_set.insert(price);
 			}
 		}
 		else {
 			//该价格目前有挂单
+			cout << "该价格目前有挂单，直接插入" << endl;
 			__price_orderList_map[price].add_order(id, quantity);
 		}
 		__id_price_map[id] = price;
 	}
 	else {
 		//买单价格大于等于卖方最低价，吃单
+		cout << "买单价格大于等于卖方最低价，吃单" << endl;
 		uint16_t quantity_surplus = quantity;
 		while (quantity_surplus > 0 && price >= __ask_price) {
-			quantity_surplus = take(__ask_price, quantity, __BID);
+			quantity_surplus = take(__ask_price, quantity_surplus, __BID);
 		}
 		if (quantity_surplus > 0) {
 			//全都吃完了还有富裕，那么在这个price价格上把剩余没成交的份额挂单
+			cout << "全都吃完了还有富裕，那么在这个price价格上把剩余没成交的份额挂单" << endl;
 			__id_price_map[id] = price;
-			__price_orderList_map[price] = OrderList(id, quantity);
+			__price_orderList_map[price] = OrderList(id, quantity_surplus);
 			__bid_price_set.insert(price);
 			__bid_price = price;
 		}
@@ -285,19 +315,24 @@ void OrderBook::bid(const size_t& id, const uint16_t& price, const uint16_t& qua
 
 //卖单，参数：id, price, quantity
 void OrderBook::ask(const size_t& id, const uint16_t& price, const uint16_t& quantity) {
+	if (__id_price_map.find(id) != __id_price_map.end()) return;
+	cout << "ask id:" << id << setw(10) << "price:" << price << setw(15) << "bid price:" << __bid_price << endl;
 	if (price > __bid_price) {
 		//卖单价格高于买方最高价，挂单
+		cout << "卖单价格高于买方最高价，挂单" << endl;
 		if (__price_orderList_map.find(price) == __price_orderList_map.end()) {
 			//该价格目前没有挂单
+			cout << "该价格目前没有挂单" << endl;
 			__price_orderList_map[price] = OrderList(id, quantity);
+			__ask_price_set.insert(price);
 			if (price < __ask_price) {
 				//如果该挂单价格小于当前卖方最低价，更新
 				__ask_price = price;
-				__ask_price_set.insert(price);
 			}
 		}
 		else {
 			//该价格目前有挂单
+			cout << "该价格目前有挂单，直接插入" << endl;
 			__price_orderList_map[price].add_order(id, quantity);
 		}
 		__id_price_map[id] = price;
@@ -305,14 +340,18 @@ void OrderBook::ask(const size_t& id, const uint16_t& price, const uint16_t& qua
 	}
 	else {
 		//卖单价格低于买方最高价，吃单
+		cout << "卖单价格低于买方最高价，吃单" << endl;
 		uint16_t quantity_surplus = quantity;
 		while (quantity_surplus > 0 && price <= __bid_price) {
-			quantity_surplus = take(__bid_price, quantity, __ASK);
+			cout << "在" << __bid_price << "处吃" << quantity_surplus << "个单，";
+			quantity_surplus = take(__bid_price, quantity_surplus, __ASK);
+			cout << "吃完还剩" << quantity_surplus << "个单" << endl;
 		}
 		if (quantity_surplus > 0) {
 			//全都吃完了还有富裕，那么在这个price价格上把剩余没成交的份额挂单
+			cout << "全都吃完了还有富裕，那么在这个price价格上把剩余没成交的份额挂单" << endl;
 			__id_price_map[id] = price;
-			__price_orderList_map[price] = OrderList(id, quantity);
+			__price_orderList_map[price] = OrderList(id, quantity_surplus);
 			__ask_price_set.insert(price);
 			__ask_price = price;
 		}
@@ -323,9 +362,9 @@ void OrderBook::ask(const size_t& id, const uint16_t& price, const uint16_t& qua
 void OrderBook::cancel(const size_t& id) {
 	if (__id_price_map.find(id) == __id_price_map.end()) return;
 	const uint16_t price = __id_price_map[id];
+	__id_price_map.erase(id);
 	if (__price_orderList_map[price].__id_offset_map.size() == 1) {
 		//如果这个要撤销的单是该价位下唯一的单
-		__id_price_map.erase(id);
 		__price_orderList_map.erase(price);
 		if (price == __ask_price) {
 			__ask_price_set.erase(price);
