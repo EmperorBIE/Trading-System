@@ -17,13 +17,13 @@ public:
 	size_t __id;			//订单时序编号（timestamp）
 	uint16_t __quantity;	//量
 
-	Order& operator=(const Order&);
+	const Order& operator=(const Order&);
 
 	Order() = delete;
 	Order(const size_t&, const uint16_t&);
 };
 
-Order& Order::operator=(const Order& order) {
+const Order& Order::operator=(const Order& order) {
 	if (this == &order) return *this;
 	__id = order.__id;
 	__quantity = order.__quantity;
@@ -57,7 +57,7 @@ OrderInfo::OrderInfo(const size_t& previous_offset, const size_t& next_offset) :
 class OrderList {
 public:
 	vector<Order> __order_list;	//按id从小到大排列的有序order表
-	vector<OrderInfo> __orderInfo_list;	//每一个order对应的信息
+	vector<OrderInfo> __orderInfo_list;	//每一个order的前一个和后一个有效order在存储结构中的位置
 	unordered_map<size_t, size_t> __id_offset_map; //从id映射到这个order在order_list中实际存储位置
 	size_t __first_valid_order_offset;	//没有被撤单的id最小的order在order_list中的存储位置
 	size_t __last_valid_order_offset;	//没有被撤单的id最大的order在order_list中的存储位置
@@ -67,7 +67,7 @@ public:
 	void reallocate_memory();	//当内存超限时重整内存
 	void print();	//打印
 
-	OrderList& operator=(OrderList&&) noexcept;
+	OrderList& operator=(OrderList&&) noexcept;	//移动赋值运算
 
 	OrderList();
 	OrderList(const size_t&, const uint16_t&);	//以一个新的order初始化OrderList
@@ -135,26 +135,31 @@ void OrderList::cancel_order(const size_t& id) {
 
 //重整内存
 void OrderList::reallocate_memory() {
+	cout << "重整内存" << endl;
+	uint16_t id;
 	size_t offset_from = __first_valid_order_offset;
 	size_t offset_to = 0;
-	__first_valid_order_offset = 0;
-	while (true) {
-		uint16_t id = __order_list[offset_from].__id;
+	while (offset_from!=__last_valid_order_offset) {
+		id = __order_list[offset_from].__id;
 		__order_list[offset_to] = __order_list[offset_from];
-		__orderInfo_list[offset_to] = __orderInfo_list[offset_from];
-		if (offset_to == 0) __orderInfo_list[offset_to].__previous_valid_offset = 0;
-		else __orderInfo_list[offset_to].__previous_valid_offset = offset_to - 1;
+		offset_from = __orderInfo_list[offset_from].__next_valid_offset;
+		__orderInfo_list[offset_to].__previous_valid_offset = offset_to - 1;
 		__orderInfo_list[offset_to].__next_valid_offset = offset_to + 1;
 		__id_offset_map[id] = offset_to;
-		if (offset_from == __last_valid_order_offset) {
-			__orderInfo_list[offset_to].__next_valid_offset = offset_to;
-			__last_valid_order_offset = offset_to;
-			break;
-		}
-		offset_from = __orderInfo_list[offset_from].__next_valid_offset;
+		offset_to++;
 	}
+	__orderInfo_list[0].__previous_valid_offset = 0;
+	id = __order_list[__last_valid_order_offset].__id;
+	__order_list[offset_to] = __order_list[__last_valid_order_offset];
+	__orderInfo_list[offset_to].__previous_valid_offset = offset_to - 1;
+	__orderInfo_list[offset_to].__next_valid_offset = offset_to;
+	__id_offset_map[id] = offset_to;
+
+	__first_valid_order_offset = 0;
+	__last_valid_order_offset = offset_to;
 }
 
+//移动赋值运算
 OrderList& OrderList::operator=(OrderList&& orderList) noexcept {
 	if (this == &orderList) return *this;
 	__order_list = move(orderList.__order_list);
@@ -197,8 +202,6 @@ public:
 
 //打印orderbook
 void OrderBook::print() {
-	cout << "ask price:" << __ask_price << endl;
-	cout << "bid price:" << __bid_price << endl;
 	cout << "====================  Orders  ====================" << endl;
 	cout << "Party" << setw(11) << "Price" << setw(16) << "Order List" << endl;
 	auto cnt = __ask_price_set.size();
@@ -354,6 +357,7 @@ void OrderBook::ask(const size_t& id, const uint16_t& price, const uint16_t& qua
 //撤单
 void OrderBook::cancel(const size_t& id) {
 	if (__id_price_map.find(id) == __id_price_map.end()) return;
+	cout << "撤销订单:" << id << endl;
 	const uint16_t price = __id_price_map[id];
 	__id_price_map.erase(id);
 	if (__price_orderList_map[price].__id_offset_map.size() == 1) {
@@ -379,5 +383,6 @@ void OrderBook::cancel(const size_t& id) {
 	else {
 		//如果这个要撤销的单不是该价位下唯一的单
 		__price_orderList_map[price].cancel_order(id);
+		__price_orderList_map[price].reallocate_memory();
 	}
 }

@@ -25,7 +25,6 @@ int main(void) {
 	orderBook.print();
 	orderBook.bid(11, 12, 9);
 	orderBook.print();
-
 	orderBook.ask(12, 7, 26);
 	orderBook.print();
 	orderBook.bid(13, 14, 5);
@@ -45,5 +44,13 @@ int main(void) {
 	orderBook.cancel(15);
 	orderBook.print();
 	orderBook.cancel(13);
+	orderBook.print();
+	orderBook.ask(16, 7, 5);
+	orderBook.print();
+	orderBook.ask(17, 7, 6);
+	orderBook.print();
+	orderBook.ask(18, 7, 7);
+	orderBook.print();
+	orderBook.cancel(18);
 	orderBook.print();
 }
