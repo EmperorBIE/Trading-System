@@ -87,11 +87,23 @@ void OrderList::print() {
 
 //添加新order
 void OrderList::add_order(const size_t& id, const uint16_t& quantity) {
-	__order_list.push_back(Order(id, quantity));
-	__orderInfo_list.push_back(OrderInfo(__last_valid_order_offset, __orderInfo_list.size()));
-	__orderInfo_list[__last_valid_order_offset].__next_valid_offset = __orderInfo_list.size() - 1;
-	__last_valid_order_offset = __orderInfo_list.size() - 1;
-	__id_offset_map[id] = __last_valid_order_offset;
+	if (__last_valid_order_offset < __order_list.size() - 1) {
+		__order_list[__last_valid_order_offset + 1] = Order(id, quantity);
+		__orderInfo_list[__last_valid_order_offset + 1] = OrderInfo(__last_valid_order_offset, __last_valid_order_offset + 1);
+		__orderInfo_list[__last_valid_order_offset].__next_valid_offset = __last_valid_order_offset + 1;
+		__last_valid_order_offset++;
+		__id_offset_map[id] = __last_valid_order_offset;
+	}
+	else {
+		__order_list.push_back(Order(id, quantity));
+		__orderInfo_list.push_back(OrderInfo(__last_valid_order_offset, __orderInfo_list.size()));
+		__orderInfo_list[__last_valid_order_offset].__next_valid_offset = __orderInfo_list.size() - 1;
+		__last_valid_order_offset = __orderInfo_list.size() - 1;
+		__id_offset_map[id] = __last_valid_order_offset;
+	}
+	if (__id_offset_map.size() > 2 && __last_valid_order_offset > 2 * __id_offset_map.size()) {
+		reallocate_memory();
+	}
 }
 
 //撤单
@@ -130,6 +142,9 @@ void OrderList::cancel_order(const size_t& id) {
 		*	可以考虑使用类似堆内存管理的方式维护，当OrderList为空的时候保持一段时间，发现一段时间内没有新的order插入再析构
 		*/
 		this->~OrderList();
+	}
+	if (__id_offset_map.size() > 2 && __last_valid_order_offset > 2 * __id_offset_map.size()) {
+		reallocate_memory();
 	}
 }
 
@@ -383,6 +398,6 @@ void OrderBook::cancel(const size_t& id) {
 	else {
 		//如果这个要撤销的单不是该价位下唯一的单
 		__price_orderList_map[price].cancel_order(id);
-		__price_orderList_map[price].reallocate_memory();
+		//__price_orderList_map[price].reallocate_memory();
 	}
 }
