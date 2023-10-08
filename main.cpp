@@ -10,7 +10,7 @@
 HWND g_hAskPrice, g_hAskQuantity, g_hBidPrice, g_hBidQuantity, g_hId, g_hResult;
 
 OrderBook orderBook;
-size_t timestamp;
+size_t timestamp = 0;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {

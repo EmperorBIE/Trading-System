@@ -7,6 +7,7 @@
 	- OrderInfo用于记录每个order在vector存储位置的前一个和后一个有效的order的位置（可以类比链表中的 *pPrev 和 *pNext ）
 		注：这里说"有效的order"是因为，有些order会被撤单，这样它们就是无效的了，但在vector存储结构中它们还暂时存在，只不过我们通过修改orderInfo的方式把这些无效的order跳过了，在内存重整的时候这些无效的order才会被销毁
 - OrderList
+![OrderList](/images/OrderList.jpg "OrderList")
 	- 维护了以下成员变量
 		- vector<Order> __order_list;	//按id从小到大排列的有序order表
 		- vector<OrderInfo> __orderInfo_list;	//每一个order的前一个和后一个有效order在存储结构中的位置
@@ -31,6 +32,7 @@
 		通过 *__orderInfo_list* 顺序访问每一个有效order，然后把它们挨个按顺序挪到前面，互相挨着
 		比如：原来有效订单的排列是 X 1 X 7 X X 11 X , 重整完了变成 1 7 11 X X X X X
 - OrderBook
+![OrderBook](/images/OrderBook.jpg "OrderBook")
 	- 维护了以下成员变量
 		- uint16_t __bid_price;	//买方最高价格
 		- uint16_t __ask_price;	//卖方最低价格
