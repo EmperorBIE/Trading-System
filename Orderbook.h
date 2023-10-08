@@ -400,6 +400,5 @@ void OrderBook::cancel(const size_t& id) {
 	else {
 		//如果这个要撤销的单不是该价位下唯一的单
 		__price_orderList_map[price].cancel_order(id);
-		//__price_orderList_map[price].reallocate_memory();
 	}
 }
