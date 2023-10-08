@@ -10,6 +10,7 @@
 HWND g_hAskPrice, g_hAskQuantity, g_hBidPrice, g_hBidQuantity, g_hId, g_hResult;
 
 OrderBook orderBook;
+size_t timestamp;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
@@ -40,6 +41,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         switch (LOWORD(wParam)) {
         case IDC_ASK_BUTTON: {
             // 获取输入的值
+            timestamp++;
+            wchar_t idStr[10];
+            wsprintf(idStr, L"%d", timestamp);
+            SetWindowText(g_hId, idStr);
+
             wchar_t id[10], price[10], quantity[10];
             GetWindowText(g_hId, id, 10);
             GetWindowText(g_hAskPrice, price, 10);
@@ -52,6 +58,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case IDC_BID_BUTTON: {
             // 获取输入的值
+            timestamp++;
+            wchar_t idStr[10];
+            wsprintf(idStr, L"%d", timestamp);
+            SetWindowText(g_hId, idStr);
+
             wchar_t id[10], price[10], quantity[10];
             GetWindowText(g_hId, id, 10);
             GetWindowText(g_hBidPrice, price, 10);

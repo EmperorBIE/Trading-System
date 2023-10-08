@@ -285,6 +285,7 @@ uint16_t OrderBook::take(const uint16_t& price, const uint16_t& quantity, const 
 //买单，参数：id, price, quantity
 void OrderBook::bid(const size_t& id, const uint16_t& price, const uint16_t& quantity) {
 	if (__id_price_map.find(id) != __id_price_map.end()) return;
+	if (quantity == 0) return;
 	cout << "bid id:" << id << setw(10) << "price:" << price << setw(15) << "ask price:" << __ask_price << endl;
 	if (price < __ask_price) {
 		//买单价格小于卖方最低价，挂单
@@ -327,6 +328,7 @@ void OrderBook::bid(const size_t& id, const uint16_t& price, const uint16_t& qua
 //卖单，参数：id, price, quantity
 void OrderBook::ask(const size_t& id, const uint16_t& price, const uint16_t& quantity) {
 	if (__id_price_map.find(id) != __id_price_map.end()) return;
+	if (quantity == 0) return;
 	cout << "ask id:" << id << setw(10) << "price:" << price << setw(15) << "bid price:" << __bid_price << endl;
 	if (price > __bid_price) {
 		//卖单价格高于买方最高价，挂单
